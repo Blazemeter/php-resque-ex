@@ -337,4 +337,8 @@ class Resque
         return md5(uniqid('', true));
     }
 
+    public static function getInProgressJobsCount() {
+        self::redis()->hLen('current_jobs');
+    }
+
 }

@@ -1,4 +1,7 @@
 <?php
+
+use MonologInit\MonologInit;
+
 require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'bootstrap.php';
 
 /**
@@ -26,6 +29,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         for($i = 0; $i < $num; ++$i) {
             $worker = new Resque_Worker('queue_' . $i);
             $worker->registerWorker();
+            $worker->registerLogger(new MonologInit('', ''));
         }
 
         // Now try to get them
@@ -36,6 +40,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
     {
         $worker = new Resque_Worker('*');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $newWorker = Resque_Worker::find((string)$worker);
         $this->assertEquals((string)$worker, (string)$newWorker);
@@ -193,15 +198,18 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $goodWorker = new Resque_Worker('jobs');
         $goodWorker->registerWorker();
         $workerId = explode(':', $goodWorker);
+        $goodWorker->registerLogger(new MonologInit('', ''));
 
         // Register some bad workers
         $worker = new Resque_Worker('jobs');
         $worker->setId($workerId[0].':1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $worker = new Resque_Worker(array('high', 'low'));
         $worker->setId($workerId[0].':2:high,low');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $this->assertEquals(3, count(Resque_Worker::all()));
 
@@ -218,11 +226,13 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $workerId = explode(':', $worker);
         $worker->setId($workerId[0].':1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         // Register some other false workers
         $worker = new Resque_Worker('jobs');
         $worker->setId('my.other.host:1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $this->assertEquals(2, count(Resque_Worker::all()));
 
@@ -257,7 +267,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_VERBOSE;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_DEBUG));
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
@@ -279,7 +289,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_NORMAL;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $this->assertEquals(false, $worker->log($message, Resque_Worker::LOG_TYPE_DEBUG));
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
@@ -323,7 +333,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_NORMAL;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $now = date('c');
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
