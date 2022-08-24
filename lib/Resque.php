@@ -338,7 +338,7 @@ class Resque
     }
 
     public static function getInProgressJobsCount() {
-        self::redis()->hLen('current_jobs');
+        return self::redis()->hlen('current_jobs');
     }
 
 }

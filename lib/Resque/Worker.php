@@ -546,7 +546,7 @@ class Resque_Worker
 
         $id = (string)$this;
         Resque::redis()->srem('workers', $id);
-        Resque::redis()->hDel('current_jobs', $id);
+        Resque::redis()->hdel('current_jobs', $id);
         Resque::redis()->del('worker:' . $id . ':started');
         Resque_Stat::clear('processed:' . $id);
         Resque_Stat::clear('failed:' . $id);
@@ -570,7 +570,7 @@ class Resque_Worker
                 'payload' => $job->payload
             )
         );
-        Resque::redis()->hSet('current_jobs', (string)$job->worker, $data);
+        Resque::redis()->hset('current_jobs', (string)$job->worker, $data);
     }
 
     /**
@@ -582,7 +582,7 @@ class Resque_Worker
         $this->currentJob = null;
         Resque_Stat::incr('processed');
         Resque_Stat::incr('processed:' . (string)$this);
-        Resque::redis()->hDel('current_jobs', (string)$this);
+        Resque::redis()->hdel('current_jobs', (string)$this);
     }
 
     /**
@@ -692,7 +692,7 @@ class Resque_Worker
      */
     public function job()
     {
-        $job = Resque::redis()->hGet('current_jobs', (string)$this);
+        $job = Resque::redis()->hget('current_jobs', (string)$this);
         if (!$job) {
             return array();
         } else {
