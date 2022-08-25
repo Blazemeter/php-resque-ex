@@ -341,4 +341,29 @@ class Resque
         return self::redis()->hlen('current_jobs');
     }
 
+    public static function cleanWorkers() {
+        $notFinishedJobs = [];
+        $workers = self::redis()->sMembers('workers');
+        foreach ($workers as $workerId) {
+            if (strpos($workerId, '-scheduler-') === false && !self::redis()->get('worker:' . $workerId . ':ping')) {
+                $notFinishedJob = self::redis()->hget('current_jobs', $workerId);
+                if ($notFinishedJob) {
+                    $notFinishedJobs[] = $notFinishedJob;
+                }
+                self::workerCleanup($workerId);
+            }
+        }
+
+        return $notFinishedJobs;
+    }
+
+    public static function workerCleanup($id) {
+        self::redis()->srem('workers', $id);
+        self::redis()->hdel('current_jobs', $id);
+        self::redis()->del('worker:' . $id . ':started');
+        Resque_Stat::clear('processed:' . $id);
+        Resque_Stat::clear('failed:' . $id);
+        self::redis()->hdel('workerLogger', $id);
+        self::redis()->del('worker:' . $id . ':ping');
+    }
 }

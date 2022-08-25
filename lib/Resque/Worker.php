@@ -198,6 +198,8 @@ class Resque_Worker
                 break;
             }
 
+            $this->workerPing();
+
             // Attempt to find and reserve a job
             $job = false;
             if (!$this->paused) {
@@ -531,6 +533,7 @@ class Resque_Worker
      */
     public function registerWorker()
     {
+        $this->workerPing();
         Resque::redis()->sadd('workers', (string)$this);
         Resque::redis()->set('worker:' . (string)$this . ':started', strftime('%a %b %d %H:%M:%S %Z %Y'));
     }
@@ -544,13 +547,7 @@ class Resque_Worker
             $this->currentJob->fail(new Resque_Job_DirtyExitException);
         }
 
-        $id = (string)$this;
-        Resque::redis()->srem('workers', $id);
-        Resque::redis()->hdel('current_jobs', $id);
-        Resque::redis()->del('worker:' . $id . ':started');
-        Resque_Stat::clear('processed:' . $id);
-        Resque_Stat::clear('failed:' . $id);
-        Resque::redis()->hdel('workerLogger', $id);
+        Resque::workerCleanup((string)$this);
     }
 
     /**
@@ -709,5 +706,11 @@ class Resque_Worker
     public function getStat($stat)
     {
         return Resque_Stat::get($stat . ':' . $this);
+    }
+
+    public function workerPing() {
+        $key = 'worker:' . (string)$this . ':ping';
+        Resque::redis()->set($key, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->expire($key, 3600);
     }
 }
