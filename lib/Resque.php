@@ -348,8 +348,15 @@ class Resque
         return md5(uniqid('', true));
     }
 
-    public static function getInProgressJobsCount() {
-        return self::redis()->hlen(self::CURRENT_JOBS);
+    public static function getInProgressJobsCount(string $workersPrefix = null): int {
+        if (empty($workersPrefix)) {
+            return self::redis()->hlen(self::CURRENT_JOBS);
+        }
+
+        $keys = self::redis()->hKeys(self::CURRENT_JOBS);
+        return count(array_filter($keys, function ($key) use($workersPrefix) {
+            return self::isEnvWorker($key, $workersPrefix);
+        }));
     }
 
     /**

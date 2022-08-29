@@ -388,6 +388,34 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $this->assertCount(3, Resque_Worker::all());
     }
 
+    public function testGetInProgressJobsCountWithPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+
+        $this->assertEquals(3, Resque::getInProgressJobsCount('prod-worker-'));
+    }
+
+    public function testGetInProgressJobsCountWithoutPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+
+        $this->assertEquals(5, Resque::getInProgressJobsCount());
+    }
+
     private function createWorker($workerId, $payload): Resque_Worker {
         $worker = new Resque_Worker('jobs');
         $worker->setId($workerId);
