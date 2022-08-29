@@ -19,7 +19,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->registerWorker();
 
         // Make sure the worker is in the list
-        $this->assertTrue((bool)$this->redis->sismember('workers', (string)$worker));
+        $this->assertTrue((bool)$this->redis->sismember(Resque::WORKERS, (string)$worker));
     }
 
     public function testGetAllWorkers()
@@ -69,7 +69,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         Resque::enqueue('jobs', 'Test_Job');
         $worker->work(0);
         $worker->work(0);
-        $this->assertEquals(0, Resque_Stat::get('processed'));
+        $this->assertEquals(0, Resque_Stat::get(Resque::PROCESSED));
     }
 
     public function testResumedWorkerPicksUpJobs()
@@ -78,10 +78,10 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->pauseProcessing();
         Resque::enqueue('jobs', 'Test_Job');
         $worker->work(0);
-        $this->assertEquals(0, Resque_Stat::get('processed'));
+        $this->assertEquals(0, Resque_Stat::get(Resque::PROCESSED));
         $worker->unPauseProcessing();
         $worker->work(0);
-        $this->assertEquals(1, Resque_Stat::get('processed'));
+        $this->assertEquals(1, Resque_Stat::get(Resque::PROCESSED));
     }
 
     public function testWorkerCanWorkOverMultipleQueues()
@@ -188,8 +188,8 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->work(0);
         $worker->work(0);
 
-        $this->assertEquals(0, $worker->getStat('processed'));
-        $this->assertEquals(0, $worker->getStat('failed'));
+        $this->assertEquals(0, $worker->getStat(Resque::PROCESSED));
+        $this->assertEquals(0, $worker->getStat(Resque::FAILED));
     }
 
     public function testWorkerCleansUpDeadWorkersOnStartup()
@@ -258,7 +258,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->workingOn($job);
         $worker->unregisterWorker();
 
-        $this->assertEquals(1, Resque_Stat::get('failed'));
+        $this->assertEquals(1, Resque_Stat::get(Resque::FAILED));
     }
 
     public function testWorkerLogAllMessageOnVerbose()
@@ -346,33 +346,55 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $this->assertEquals('[' . $now . '] x', $lines[0]);
     }
 
-    public function testWorkersCleanup() {
+    public function testWorkersCleanupWithPrefix() {
         $payload = array(
             'class' => 'Test_Job'
         );
 
-        $worker1 = new Resque_Worker('queue_' . 1);
-        $worker1->registerWorker();
-        $worker1->registerLogger(new MonologInit('', ''));
-        $job1 = new Resque_Job('jobs', $payload);
-        $worker1->workingOn($job1);
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+        $worker6 = $this->createWorker("prod-worker-scheduler-12347:1:jobs", $payload);
 
-        $worker2 = new Resque_Worker('queue_' . 2);
-        $worker2->registerWorker();
-        $worker2->registerLogger(new MonologInit('', ''));
-        $job2 = new Resque_Job('jobs', $payload);
-        $worker2->workingOn($job2);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker1 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker3 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker5 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker6 . Resque::PING_SUFFIX);
 
-        $worker3 = new Resque_Worker('queue_' . 3);
-        $worker3->registerWorker();
-        $worker3->registerLogger(new MonologInit('', ''));
-        $job3 = new Resque_Job('jobs', $payload);
-        $worker3->workingOn($job3);
+        $this->assertCount(2, Resque::cleanWorkers('prod-worker-'));
+        $this->assertCount(4, Resque_Worker::all());
+    }
 
-        Resque::redis()->del('worker:' . (string)$worker1 . ':ping');
-        Resque::redis()->del('worker:' . (string)$worker3 . ':ping');
+    public function testWorkersCleanupNoPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
 
-        $this->assertCount(2, Resque::cleanWorkers());
-        $this->assertCount(1, Resque_Worker::all());
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+        $worker6 = $this->createWorker("prod-worker-scheduler-12347:1:jobs", $payload);
+
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker1 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker3 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker5 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker6 . Resque::PING_SUFFIX);
+
+        $this->assertCount(3, Resque::cleanWorkers());
+        $this->assertCount(3, Resque_Worker::all());
+    }
+
+    private function createWorker($workerId, $payload): Resque_Worker {
+        $worker = new Resque_Worker('jobs');
+        $worker->setId($workerId);
+        $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
+        $job = new Resque_Job('jobs', $payload);
+        $worker->workingOn($job);
+        return $worker;
     }
 }

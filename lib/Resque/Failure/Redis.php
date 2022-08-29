@@ -27,12 +27,12 @@ class Resque_Failure_Redis implements Resque_Failure_Interface
 		$data['backtrace'] = explode("\n", $exception->getTraceAsString());
 		$data['worker'] = (string)$worker;
 		$data['queue'] = $queue;
-		Resque::Redis()->setex('failed:'.$payload['id'], 3600*14, serialize($data));
+		Resque::Redis()->setex(Resque::FAILED_PREFIX . $payload['id'], 3600*14, serialize($data));
 	}
 
 	static public function get($jobId)
 	{
-		$data = Resque::Redis()->get('failed:' . $jobId);
+		$data = Resque::Redis()->get(Resque::FAILED_PREFIX . $jobId);
 		return unserialize($data);
 	}
 }

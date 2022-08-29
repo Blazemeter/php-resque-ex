@@ -232,8 +232,8 @@ class Resque_Job
 			$this->worker,
 			$this->queue
 		);
-		Resque_Stat::incr('failed');
-		Resque_Stat::incr('failed:' . $this->worker);
+		Resque_Stat::incr(Resque::FAILED);
+		Resque_Stat::incr(Resque::FAILED_PREFIX . $this->worker);
 	}
 
 	/**

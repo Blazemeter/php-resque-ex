@@ -100,7 +100,7 @@ class Resque_Worker
      */
     public static function all()
     {
-        $workers = Resque::redis()->smembers('workers');
+        $workers = Resque::redis()->smembers(Resque::WORKERS);
         if (!is_array($workers)) {
             $workers = array();
         }
@@ -120,7 +120,7 @@ class Resque_Worker
      */
     public static function exists($workerId)
     {
-        return (bool)Resque::redis()->sismember('workers', $workerId);
+        return (bool)Resque::redis()->sismember(Resque::WORKERS, $workerId);
     }
 
     /**
@@ -534,8 +534,8 @@ class Resque_Worker
     public function registerWorker()
     {
         $this->workerPing();
-        Resque::redis()->sadd('workers', (string)$this);
-        Resque::redis()->set('worker:' . (string)$this . ':started', strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->sadd(Resque::WORKERS, (string)$this);
+        Resque::redis()->set(Resque::WORKER_PREFIX . (string)$this . Resque::STARTED_SUFFIX, strftime('%a %b %d %H:%M:%S %Z %Y'));
     }
 
     /**
@@ -567,7 +567,7 @@ class Resque_Worker
                 'payload' => $job->payload
             )
         );
-        Resque::redis()->hset('current_jobs', (string)$job->worker, $data);
+        Resque::redis()->hset(Resque::CURRENT_JOBS, (string)$job->worker, $data);
     }
 
     /**
@@ -577,9 +577,9 @@ class Resque_Worker
     public function doneWorking()
     {
         $this->currentJob = null;
-        Resque_Stat::incr('processed');
-        Resque_Stat::incr('processed:' . (string)$this);
-        Resque::redis()->hdel('current_jobs', (string)$this);
+        Resque_Stat::incr(Resque::PROCESSED);
+        Resque_Stat::incr(Resque::PROCESSED_PREFIX . (string)$this);
+        Resque::redis()->hdel(Resque::CURRENT_JOBS, (string)$this);
     }
 
     /**
@@ -672,12 +672,12 @@ class Resque_Worker
     public function registerLogger($logger = null)
     {
         $this->logger = $logger->getInstance();
-        Resque::redis()->hset('workerLogger', (string)$this, json_encode(array($logger->handler, $logger->target)));
+        Resque::redis()->hset(Resque::WORKER_LOGGER, (string)$this, json_encode(array($logger->handler, $logger->target)));
     }
 
     public function getLogger($workerId)
     {
-        $settings = json_decode(Resque::redis()->hget('workerLogger', (string)$workerId));
+        $settings = json_decode(Resque::redis()->hget(Resque::WORKER_LOGGER, (string)$workerId));
         $logger = new MonologInit\MonologInit($settings[0], $settings[1]);
         return $logger->getInstance();
     }
@@ -689,7 +689,7 @@ class Resque_Worker
      */
     public function job()
     {
-        $job = Resque::redis()->hget('current_jobs', (string)$this);
+        $job = Resque::redis()->hget(Resque::CURRENT_JOBS, (string)$this);
         if (!$job) {
             return array();
         } else {
@@ -709,7 +709,7 @@ class Resque_Worker
     }
 
     public function workerPing() {
-        $key = 'worker:' . (string)$this . ':ping';
+        $key = Resque::WORKER_PREFIX . (string)$this . Resque::PING_SUFFIX;
         Resque::redis()->set($key, strftime('%a %b %d %H:%M:%S %Z %Y'));
         Resque::redis()->expire($key, 3600);
     }
