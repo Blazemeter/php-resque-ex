@@ -341,6 +341,11 @@ class Resque
         return self::redis()->hlen('current_jobs');
     }
 
+    /**
+     * Clean workers that were terminated after timeout
+     *
+     * @return array of unfinished jobs
+     */
     public static function cleanWorkers() {
         $notFinishedJobs = [];
         $workers = self::redis()->sMembers('workers');
