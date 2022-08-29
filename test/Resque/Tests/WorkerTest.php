@@ -346,4 +346,33 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $this->assertEquals('[' . $now . '] x', $lines[0]);
     }
 
+    public function testWorkersCleanup() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $worker1 = new Resque_Worker('queue_' . 1);
+        $worker1->registerWorker();
+        $worker1->registerLogger(new MonologInit('', ''));
+        $job1 = new Resque_Job('jobs', $payload);
+        $worker1->workingOn($job1);
+
+        $worker2 = new Resque_Worker('queue_' . 2);
+        $worker2->registerWorker();
+        $worker2->registerLogger(new MonologInit('', ''));
+        $job2 = new Resque_Job('jobs', $payload);
+        $worker2->workingOn($job2);
+
+        $worker3 = new Resque_Worker('queue_' . 3);
+        $worker3->registerWorker();
+        $worker3->registerLogger(new MonologInit('', ''));
+        $job3 = new Resque_Job('jobs', $payload);
+        $worker3->workingOn($job3);
+
+        Resque::redis()->del('worker:' . (string)$worker1 . ':ping');
+        Resque::redis()->del('worker:' . (string)$worker3 . ':ping');
+
+        $this->assertCount(2, Resque::cleanWorkers());
+        $this->assertCount(1, Resque_Worker::all());
+    }
 }
