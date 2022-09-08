@@ -381,13 +381,19 @@ class Resque
     }
 
     public static function workerCleanup(string $workerId) {
-        self::redis()->srem(self::WORKERS, $workerId);
-        self::redis()->hdel(self::CURRENT_JOBS, $workerId);
-        self::redis()->del(self::WORKER_PREFIX . $workerId . self:: STARTED_SUFFIX);
-        Resque_Stat::clear(self::PROCESSED_PREFIX . $workerId);
-        Resque_Stat::clear(self::FAILED_PREFIX . $workerId);
-        self::redis()->hdel(self::WORKER_LOGGER, $workerId);
-        self::redis()->del(self::WORKER_PREFIX . $workerId . self::PING_SUFFIX);
+        try {
+            self::redis()->multi();
+            self::redis()->srem(self::WORKERS, $workerId);
+            self::redis()->hdel(self::CURRENT_JOBS, $workerId);
+            self::redis()->del(self::WORKER_PREFIX . $workerId . self:: STARTED_SUFFIX);
+            Resque_Stat::clear(self::PROCESSED_PREFIX . $workerId);
+            Resque_Stat::clear(self::FAILED_PREFIX . $workerId);
+            self::redis()->hdel(self::WORKER_LOGGER, $workerId);
+            self::redis()->del(self::WORKER_PREFIX . $workerId . self::PING_SUFFIX);
+            self::redis()->exec();
+        } catch (Throwable $t) {
+            error_log("Worker cleanup error: " .  $workerId);
+        }
     }
 
     private static function isWorkerAliveByPing(string $workerId): bool {
