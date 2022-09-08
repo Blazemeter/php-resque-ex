@@ -533,9 +533,11 @@ class Resque_Worker
      */
     public function registerWorker()
     {
+        Resque::redis()->multi();
         $this->workerPing();
         Resque::redis()->sadd(Resque::WORKERS, (string)$this);
         Resque::redis()->set(Resque::WORKER_PREFIX . (string)$this . Resque::STARTED_SUFFIX, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->exec();
     }
 
     /**
@@ -577,9 +579,11 @@ class Resque_Worker
     public function doneWorking()
     {
         $this->currentJob = null;
+        Resque::redis()->multi();
         Resque_Stat::incr(Resque::PROCESSED);
         Resque_Stat::incr(Resque::PROCESSED_PREFIX . (string)$this);
         Resque::redis()->hdel(Resque::CURRENT_JOBS, (string)$this);
+        Resque::redis()->exec();
     }
 
     /**
