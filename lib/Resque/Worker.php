@@ -100,7 +100,7 @@ class Resque_Worker
      */
     public static function all()
     {
-        $workers = Resque::redis()->smembers('workers');
+        $workers = Resque::redis()->smembers(Resque::WORKERS);
         if (!is_array($workers)) {
             $workers = array();
         }
@@ -120,7 +120,7 @@ class Resque_Worker
      */
     public static function exists($workerId)
     {
-        return (bool)Resque::redis()->sismember('workers', $workerId);
+        return (bool)Resque::redis()->sismember(Resque::WORKERS, $workerId);
     }
 
     /**
@@ -197,6 +197,8 @@ class Resque_Worker
             if ($this->shutdown) {
                 break;
             }
+
+            $this->workerPing();
 
             // Attempt to find and reserve a job
             $job = false;
@@ -531,8 +533,11 @@ class Resque_Worker
      */
     public function registerWorker()
     {
-        Resque::redis()->sadd('workers', (string)$this);
-        Resque::redis()->set('worker:' . (string)$this . ':started', strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->multi();
+        $this->workerPing();
+        Resque::redis()->sadd(Resque::WORKERS, (string)$this);
+        Resque::redis()->set(Resque::WORKER_PREFIX . (string)$this . Resque::STARTED_SUFFIX, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->exec();
     }
 
     /**
@@ -544,13 +549,7 @@ class Resque_Worker
             $this->currentJob->fail(new Resque_Job_DirtyExitException);
         }
 
-        $id = (string)$this;
-        Resque::redis()->srem('workers', $id);
-        Resque::redis()->del('worker:' . $id);
-        Resque::redis()->del('worker:' . $id . ':started');
-        Resque_Stat::clear('processed:' . $id);
-        Resque_Stat::clear('failed:' . $id);
-        Resque::redis()->hdel('workerLogger', $id);
+        Resque::workerCleanup((string)$this);
     }
 
     /**
@@ -570,7 +569,7 @@ class Resque_Worker
                 'payload' => $job->payload
             )
         );
-        Resque::redis()->set('worker:' . $job->worker, $data);
+        Resque::redis()->hset(Resque::CURRENT_JOBS, (string)$job->worker, $data);
     }
 
     /**
@@ -580,9 +579,11 @@ class Resque_Worker
     public function doneWorking()
     {
         $this->currentJob = null;
-        Resque_Stat::incr('processed');
-        Resque_Stat::incr('processed:' . (string)$this);
-        Resque::redis()->del('worker:' . (string)$this);
+        Resque::redis()->multi();
+        Resque_Stat::incr(Resque::PROCESSED);
+        Resque_Stat::incr(Resque::PROCESSED_PREFIX . (string)$this);
+        Resque::redis()->hdel(Resque::CURRENT_JOBS, (string)$this);
+        Resque::redis()->exec();
     }
 
     /**
@@ -675,12 +676,12 @@ class Resque_Worker
     public function registerLogger($logger = null)
     {
         $this->logger = $logger->getInstance();
-        Resque::redis()->hset('workerLogger', (string)$this, json_encode(array($logger->handler, $logger->target)));
+        Resque::redis()->hset(Resque::WORKER_LOGGER, (string)$this, json_encode(array($logger->handler, $logger->target)));
     }
 
     public function getLogger($workerId)
     {
-        $settings = json_decode(Resque::redis()->hget('workerLogger', (string)$workerId));
+        $settings = json_decode(Resque::redis()->hget(Resque::WORKER_LOGGER, (string)$workerId));
         $logger = new MonologInit\MonologInit($settings[0], $settings[1]);
         return $logger->getInstance();
     }
@@ -692,7 +693,7 @@ class Resque_Worker
      */
     public function job()
     {
-        $job = Resque::redis()->get('worker:' . $this);
+        $job = Resque::redis()->hget(Resque::CURRENT_JOBS, (string)$this);
         if (!$job) {
             return array();
         } else {
@@ -709,5 +710,11 @@ class Resque_Worker
     public function getStat($stat)
     {
         return Resque_Stat::get($stat . ':' . $this);
+    }
+
+    public function workerPing() {
+        $key = Resque::WORKER_PREFIX . (string)$this . Resque::PING_SUFFIX;
+        Resque::redis()->set($key, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->expire($key, 3600);
     }
 }

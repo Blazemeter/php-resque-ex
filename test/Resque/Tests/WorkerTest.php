@@ -1,4 +1,7 @@
 <?php
+
+use MonologInit\MonologInit;
+
 require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'bootstrap.php';
 
 /**
@@ -16,7 +19,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->registerWorker();
 
         // Make sure the worker is in the list
-        $this->assertTrue((bool)$this->redis->sismember('workers', (string)$worker));
+        $this->assertTrue((bool)$this->redis->sismember(Resque::WORKERS, (string)$worker));
     }
 
     public function testGetAllWorkers()
@@ -26,6 +29,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         for($i = 0; $i < $num; ++$i) {
             $worker = new Resque_Worker('queue_' . $i);
             $worker->registerWorker();
+            $worker->registerLogger(new MonologInit('', ''));
         }
 
         // Now try to get them
@@ -36,6 +40,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
     {
         $worker = new Resque_Worker('*');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $newWorker = Resque_Worker::find((string)$worker);
         $this->assertEquals((string)$worker, (string)$newWorker);
@@ -64,7 +69,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         Resque::enqueue('jobs', 'Test_Job');
         $worker->work(0);
         $worker->work(0);
-        $this->assertEquals(0, Resque_Stat::get('processed'));
+        $this->assertEquals(0, Resque_Stat::get(Resque::PROCESSED));
     }
 
     public function testResumedWorkerPicksUpJobs()
@@ -73,10 +78,10 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->pauseProcessing();
         Resque::enqueue('jobs', 'Test_Job');
         $worker->work(0);
-        $this->assertEquals(0, Resque_Stat::get('processed'));
+        $this->assertEquals(0, Resque_Stat::get(Resque::PROCESSED));
         $worker->unPauseProcessing();
         $worker->work(0);
-        $this->assertEquals(1, Resque_Stat::get('processed'));
+        $this->assertEquals(1, Resque_Stat::get(Resque::PROCESSED));
     }
 
     public function testWorkerCanWorkOverMultipleQueues()
@@ -183,8 +188,8 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->work(0);
         $worker->work(0);
 
-        $this->assertEquals(0, $worker->getStat('processed'));
-        $this->assertEquals(0, $worker->getStat('failed'));
+        $this->assertEquals(0, $worker->getStat(Resque::PROCESSED));
+        $this->assertEquals(0, $worker->getStat(Resque::FAILED));
     }
 
     public function testWorkerCleansUpDeadWorkersOnStartup()
@@ -193,15 +198,18 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $goodWorker = new Resque_Worker('jobs');
         $goodWorker->registerWorker();
         $workerId = explode(':', $goodWorker);
+        $goodWorker->registerLogger(new MonologInit('', ''));
 
         // Register some bad workers
         $worker = new Resque_Worker('jobs');
         $worker->setId($workerId[0].':1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $worker = new Resque_Worker(array('high', 'low'));
         $worker->setId($workerId[0].':2:high,low');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $this->assertEquals(3, count(Resque_Worker::all()));
 
@@ -218,11 +226,13 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $workerId = explode(':', $worker);
         $worker->setId($workerId[0].':1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         // Register some other false workers
         $worker = new Resque_Worker('jobs');
         $worker->setId('my.other.host:1:jobs');
         $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
 
         $this->assertEquals(2, count(Resque_Worker::all()));
 
@@ -248,7 +258,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->workingOn($job);
         $worker->unregisterWorker();
 
-        $this->assertEquals(1, Resque_Stat::get('failed'));
+        $this->assertEquals(1, Resque_Stat::get(Resque::FAILED));
     }
 
     public function testWorkerLogAllMessageOnVerbose()
@@ -257,7 +267,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_VERBOSE;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_DEBUG));
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
@@ -279,7 +289,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_NORMAL;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $this->assertEquals(false, $worker->log($message, Resque_Worker::LOG_TYPE_DEBUG));
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
@@ -323,7 +333,7 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $worker->logLevel = Resque_Worker::LOG_NORMAL;
         $worker->logOutput = fopen('php://memory', 'r+');
 
-        $message = array('message' => 'x', 'data' => '');
+        $message = array('message' => 'x', 'data' => []);
 
         $now = date('c');
         $this->assertEquals(true, $worker->log($message, Resque_Worker::LOG_TYPE_INFO));
@@ -336,4 +346,98 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
         $this->assertEquals('[' . $now . '] x', $lines[0]);
     }
 
+    public function testWorkersCleanupWithPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+        $worker6 = $this->createWorker("prod-worker-scheduler-12347:1:jobs", $payload);
+
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker1 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker3 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker5 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker6 . Resque::PING_SUFFIX);
+
+        $this->assertCount(2, Resque::cleanWorkers('prod-worker-'));
+        $this->assertCount(4, Resque_Worker::all());
+    }
+
+    public function testWorkersCleanupNoPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+        $worker6 = $this->createWorker("prod-worker-scheduler-12347:1:jobs", $payload);
+
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker1 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker3 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker5 . Resque::PING_SUFFIX);
+        Resque::redis()->del(Resque::WORKER_PREFIX . $worker6 . Resque::PING_SUFFIX);
+
+        $this->assertCount(3, Resque::cleanWorkers());
+        $this->assertCount(3, Resque_Worker::all());
+    }
+
+    public function testGetInProgressJobsCountWithPrefix() {
+        $payload = array(
+            'id' => 'id',
+            'class' => 'Test_Job'
+        );
+
+        $this->assertEquals(0, Resque::getInProgressJobsCount('prod-worker-'));
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+
+        $this->assertEquals(3, Resque::getInProgressJobsCount('prod-worker-'));
+
+        $worker1->unregisterWorker();
+        $worker2->unregisterWorker();
+        $worker3->unregisterWorker();
+
+        $this->assertEquals(0, Resque::getInProgressJobsCount('prod-worker-'));
+    }
+
+    public function testGetInProgressJobsCountWithoutPrefix() {
+        $payload = array(
+            'class' => 'Test_Job'
+        );
+
+        $this->assertEquals(0, Resque::getInProgressJobsCount());
+
+        $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload);
+        $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload);
+        $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload);
+
+        $this->assertEquals(5, Resque::getInProgressJobsCount());
+
+        Resque::redis()->del(Resque::CURRENT_JOBS);
+
+        $this->assertEquals(0, Resque::getInProgressJobsCount());
+    }
+
+    private function createWorker($workerId, $payload): Resque_Worker {
+        $worker = new Resque_Worker('jobs');
+        $worker->setId($workerId);
+        $worker->registerWorker();
+        $worker->registerLogger(new MonologInit('', ''));
+        $job = new Resque_Job('jobs', $payload);
+        $worker->workingOn($job);
+        return $worker;
+    }
 }

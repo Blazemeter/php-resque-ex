@@ -12,6 +12,17 @@ require_once dirname(__FILE__) . '/Resque/Exception.php';
 class Resque
 {
     const VERSION = '1.2.5';
+    const WORKERS = 'workers';
+    const CURRENT_JOBS = 'current_jobs';
+    const WORKER_LOGGER = 'workerLogger';
+    const WORKER_PREFIX = 'worker:';
+    const PROCESSED = 'processed';
+    const PROCESSED_PREFIX = self::PROCESSED . ':';
+    const FAILED = 'failed';
+    const FAILED_PREFIX = self::FAILED . ':';
+    const STARTED_SUFFIX = ':started';
+    const PING_SUFFIX = ':ping';
+    const SCHEDULER_IDENTIFIER = '-scheduler-';
 
     /**
      * @var Resque_Redis Instance of Resque_Redis that talks to redis.
@@ -337,4 +348,60 @@ class Resque
         return md5(uniqid('', true));
     }
 
+    public static function getInProgressJobsCount(string $workersPrefix = null): int {
+        if (empty($workersPrefix)) {
+            return self::redis()->hlen(self::CURRENT_JOBS);
+        }
+
+        $keys = self::redis()->hKeys(self::CURRENT_JOBS);
+        return count(array_filter($keys, function ($key) use($workersPrefix) {
+            return self::isEnvWorker($key, $workersPrefix);
+        }));
+    }
+
+    /**
+     * Clean workers that were terminated after timeout
+     *
+     * @return array of unfinished jobs
+     */
+    public static function cleanWorkers(string $workersPrefix = null): array {
+        $notFinishedJobs = [];
+        $workers = self::redis()->sMembers(self::WORKERS);
+        foreach ($workers as $workerId) {
+            if (self::isEnvWorker($workerId, $workersPrefix) && !self::isWorkerAliveByPing($workerId)) {
+                $notFinishedJob = self::redis()->hget(self::CURRENT_JOBS, $workerId);
+                if ($notFinishedJob) {
+                    $notFinishedJobs[] = $notFinishedJob;
+                }
+                self::workerCleanup($workerId);
+            }
+        }
+
+        return $notFinishedJobs;
+    }
+
+    public static function workerCleanup(string $workerId) {
+        try {
+            self::redis()->multi();
+            self::redis()->srem(self::WORKERS, $workerId);
+            self::redis()->hdel(self::CURRENT_JOBS, $workerId);
+            self::redis()->del(self::WORKER_PREFIX . $workerId . self:: STARTED_SUFFIX);
+            Resque_Stat::clear(self::PROCESSED_PREFIX . $workerId);
+            Resque_Stat::clear(self::FAILED_PREFIX . $workerId);
+            self::redis()->hdel(self::WORKER_LOGGER, $workerId);
+            self::redis()->del(self::WORKER_PREFIX . $workerId . self::PING_SUFFIX);
+            self::redis()->exec();
+        } catch (Throwable $t) {
+            error_log("Worker cleanup error: " .  $workerId);
+        }
+    }
+
+    private static function isWorkerAliveByPing(string $workerId): bool {
+        return self::redis()->get(self::WORKER_PREFIX . $workerId . self::PING_SUFFIX) !== false;
+    }
+
+    private static function isEnvWorker(string $workerId, string $workersPrefix = null): bool {
+       return  (empty($workersPrefix) || strpos($workerId, $workersPrefix) === 0)
+           && strpos($workerId, self::SCHEDULER_IDENTIFIER) === false;
+    }
 }
