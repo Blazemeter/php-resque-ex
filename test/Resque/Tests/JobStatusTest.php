@@ -10,7 +10,7 @@ require_once dirname(__FILE__) . '/bootstrap.php';
  */
 class Resque_Tests_JobStatusTest extends Resque_Tests_TestCase
 {
-	public function setUp()
+	public function setUp(): void
 	{
 		parent::setUp();
 

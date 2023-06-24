@@ -536,7 +536,7 @@ class Resque_Worker
         Resque::redis()->multi();
         $this->workerPing();
         Resque::redis()->sadd(Resque::WORKERS, (string)$this);
-        Resque::redis()->set(Resque::WORKER_PREFIX . (string)$this . Resque::STARTED_SUFFIX, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->set(Resque::WORKER_PREFIX . (string)$this . Resque::STARTED_SUFFIX, (new DateTimeImmutable())->format('D M d H:i:s e Y'));
         Resque::redis()->exec();
     }
 
@@ -565,7 +565,7 @@ class Resque_Worker
         $data = json_encode(
             array(
                 'queue' => $job->queue,
-                'run_at' => strftime('%a %b %d %H:%M:%S %Z %Y'),
+                'run_at' => (new DateTimeImmutable())->format('D M d H:i:s e Y'),
                 'payload' => $job->payload
             )
         );
@@ -714,7 +714,7 @@ class Resque_Worker
 
     public function workerPing() {
         $key = Resque::WORKER_PREFIX . (string)$this . Resque::PING_SUFFIX;
-        Resque::redis()->set($key, strftime('%a %b %d %H:%M:%S %Z %Y'));
+        Resque::redis()->set($key, (new DateTimeImmutable())->format('D M d H:i:s e Y'));
         Resque::redis()->expire($key, 3600);
     }
 }
