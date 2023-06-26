@@ -433,42 +433,60 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
 
     public function testGetJobsToRerunWithPrefix() {
         $payload1 = array(
-            'class' => 'Test_Job1'
+            'class' => 'Test_Job1',
+            'args' => []
         );
 
         $payload2 = array(
-            'class' => 'Test_Job2'
+            'class' => 'Test_Job2',
+            'args' => []
+        );
+
+        $payload3 = array(
+            'class' => 'Test_Job1',
+            'args' => ['rerun' => true]
         );
 
         $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload1);
-        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload2);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload3);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload2);
         $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload1);
         $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload2);
         sleep(3);
-        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload1);
+        $worker6 = $this->createWorker("prod-worker-12348:1:jobs", $payload1);
         sleep(2);
 
         $this->assertCount(1, Resque::getJobsToRerun('prod-worker-', 4, ['Test_Job1']));
+        $this->assertEquals(3, Resque::getInProgressJobsCount('prod-worker-'));
     }
 
     public function testGetJobsToRerunWithoutPrefix() {
         $payload1 = array(
-            'class' => 'Test_Job1'
+            'class' => 'Test_Job1',
+            'args' => []
         );
 
         $payload2 = array(
-            'class' => 'Test_Job2'
+            'class' => 'Test_Job2',
+            'args' => []
+        );
+
+        $payload3 = array(
+            'class' => 'Test_Job1',
+            'args' => ['rerun' => true]
         );
 
         $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload1);
-        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload2);
+        $worker2 = $this->createWorker("prod-worker-12346:1:jobs", $payload3);
+        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload2);
         $worker4 = $this->createWorker("prod-rc-worker-12346:1:jobs", $payload1);
         $worker5 = $this->createWorker("prod-rc-worker-12347:1:jobs", $payload2);
         sleep(3);
-        $worker3 = $this->createWorker("prod-worker-12347:1:jobs", $payload1);
+        $worker6 = $this->createWorker("prod-worker-12348:1:jobs", $payload1);
         sleep(2);
 
         $this->assertCount(2, Resque::getJobsToRerun(null, 4, ['Test_Job1']));
+        $this->assertEquals(4, Resque::getInProgressJobsCount());
     }
 
     private function createWorker($workerId, $payload): Resque_Worker {
