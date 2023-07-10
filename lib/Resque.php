@@ -196,7 +196,6 @@ class Resque
             Resque_Event::trigger('afterEnqueue', [
                 'class' => $class,
                 'args'  => $args,
-                'queue' => $queue,
             ]);
         }
 
@@ -378,6 +377,27 @@ class Resque
         }
 
         return $notFinishedJobs;
+    }
+
+    public static function getJobsToRerun(string $workersPrefix = null, int $jobTimeout = 60, array $workersToRerun = []) {
+        $jobsToRerun = [];
+        $workers = self::redis()->hKeys(self::CURRENT_JOBS);
+        $now = date_timestamp_get(date_create());
+        foreach ($workers as $workerId) {
+            if (self::isEnvWorker($workerId, $workersPrefix)) {
+                $notFinishedJob = self::redis()->hget(self::CURRENT_JOBS, $workerId);
+                if ($notFinishedJob) {
+                    $notFinishedJob = json_decode($notFinishedJob, true);
+                    $runAt = date_timestamp_get(date_create_from_format('D M d H:i:s e Y', $notFinishedJob['run_at']));
+                    if (in_array($notFinishedJob['payload']['class'], $workersToRerun) && ($now - $runAt) > $jobTimeout
+                        && !array_key_exists("rerun", $notFinishedJob['payload']['args'][0])) {
+                        $jobsToRerun[] = $notFinishedJob;
+                        self::redis()->hdel(self::CURRENT_JOBS, $workerId);
+                    }
+                }
+            }
+        }
+        return $jobsToRerun;
     }
 
     public static function workerCleanup(string $workerId) {
