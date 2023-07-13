@@ -389,9 +389,8 @@ class Resque
                 if ($notFinishedJob) {
                     $notFinishedJob = json_decode($notFinishedJob, true);
                     $runAt = date_timestamp_get(date_create_from_format('D M d H:i:s e Y', $notFinishedJob['run_at']));
-                    if (in_array($notFinishedJob['payload']['class'], $workersToRerun) && ($now - $runAt) > $jobTimeout
-                        && !in_array("rerun", $notFinishedJob['payload']['args'])) {
-                        $jobsToRerun[] = $notFinishedJob;
+                    if (in_array($notFinishedJob['payload']['class'], $workersToRerun) && ($now - $runAt) > $jobTimeout) {
+                        $jobsToRerun[] = $notFinishedJob['payload'];
                         self::redis()->hdel(self::CURRENT_JOBS, $workerId);
                     }
                 }
