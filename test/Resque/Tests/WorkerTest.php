@@ -434,17 +434,17 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
     public function testGetJobsToRerunWithPrefix() {
         $payload1 = array(
             'class' => 'Test_Job1',
-            'args' => [[]]
+            'args' => []
         );
 
         $payload2 = array(
             'class' => 'Test_Job2',
-            'args' => [[]]
+            'args' => []
         );
 
         $payload3 = array(
             'class' => 'Test_Job1',
-            'args' => [['rerun' => true]]
+            'args' => ['rerun' => true]
         );
 
         $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload1);
@@ -463,17 +463,17 @@ class Resque_Tests_WorkerTest extends Resque_Tests_TestCase
     public function testGetJobsToRerunWithoutPrefix() {
         $payload1 = array(
             'class' => 'Test_Job1',
-            'args' => [[]]
+            'args' => []
         );
 
         $payload2 = array(
             'class' => 'Test_Job2',
-            'args' => [[]]
+            'args' => []
         );
 
         $payload3 = array(
             'class' => 'Test_Job1',
-            'args' => [['rerun' => true]]
+            'args' => ['rerun' => true]
         );
 
         $worker1 = $this->createWorker("prod-worker-12345:1:jobs", $payload1);
