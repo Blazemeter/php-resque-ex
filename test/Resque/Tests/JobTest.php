@@ -12,7 +12,7 @@ class Resque_Tests_JobTest extends Resque_Tests_TestCase
 {
 	protected $worker;
 
-	public function setUp(): void
+	public function setUp()
 	{
 		parent::setUp();
 
@@ -38,10 +38,12 @@ class Resque_Tests_JobTest extends Resque_Tests_TestCase
 		$this->assertEquals('Test_Job', $job->payload['class']);
 	}
 
-    public function testObjectArgumentsCannotBePassedToJob()
+	/**
+	 * @expectedException InvalidArgumentException
+	 */
+	public function testObjectArgumentsCannotBePassedToJob()
 	{
-        $this->expectException(InvalidArgumentException::class);
-        $args = new stdClass;
+		$args = new stdClass;
 		$args->test = 'somevalue';
 		Resque::enqueue('jobs', 'Test_Job', $args);
 	}
@@ -114,19 +116,23 @@ class Resque_Tests_JobTest extends Resque_Tests_TestCase
 		$this->assertEquals(1, Resque_Stat::get(Resque::FAILED_PREFIX . $this->worker));
 	}
 
-    public function testJobWithoutPerformMethodThrowsException()
+	/**
+	 * @expectedException Resque_Exception
+	 */
+	public function testJobWithoutPerformMethodThrowsException()
 	{
-        $this->expectException(Resque_Exception::class);
-        Resque::enqueue('jobs', 'Test_Job_Without_Perform_Method');
+		Resque::enqueue('jobs', 'Test_Job_Without_Perform_Method');
 		$job = $this->worker->reserve();
 		$job->worker = $this->worker;
 		$job->perform();
 	}
 
-    public function testInvalidJobThrowsException()
+	/**
+	 * @expectedException Resque_Exception
+	 */
+	public function testInvalidJobThrowsException()
 	{
-        $this->expectException(Resque_Exception::class);
-        Resque::enqueue('jobs', 'Invalid_Job');
+		Resque::enqueue('jobs', 'Invalid_Job');
 		$job = $this->worker->reserve();
 		$job->worker = $this->worker;
 		$job->perform();
