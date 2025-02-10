@@ -55,7 +55,7 @@ class Resque_Job_Status
 			'updated' => time(),
 			'started' => time(),
 		);
-		Resque::redis()->set('job:' . $id . ':status', json_encode($statusPacket));
+		Resque::redis()->setex('job:' . $id . ':status', 604800, json_encode($statusPacket));
 	}
 
 	/**
