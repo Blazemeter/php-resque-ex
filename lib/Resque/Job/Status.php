@@ -13,6 +13,9 @@ class Resque_Job_Status
 	const STATUS_FAILED = 3;
 	const STATUS_COMPLETE = 4;
 
+    const SECONDS_IN_1_DAY = 86400;
+    const SECONDS_IN_1_WEEK = 604800;
+
 	/**
 	 * @var string The ID of the job this status class refers back to.
 	 */
@@ -55,7 +58,7 @@ class Resque_Job_Status
 			'updated' => time(),
 			'started' => time(),
 		);
-		Resque::redis()->setex('job:' . $id . ':status', 604800, json_encode($statusPacket));
+		Resque::redis()->setex('job:' . $id . ':status', self::SECONDS_IN_1_WEEK, json_encode($statusPacket));
 	}
 
 	/**
@@ -94,11 +97,11 @@ class Resque_Job_Status
 			'status' => $status,
 			'updated' => time(),
 		);
-		Resque::redis()->set((string)$this, json_encode($statusPacket));
+		Resque::redis()->setex((string)$this, self::SECONDS_IN_1_WEEK, json_encode($statusPacket));
 
 		// Expire the status for completed jobs after 24 hours
 		if(in_array($status, self::$completeStatuses)) {
-			Resque::redis()->expire((string)$this, 86400);
+			Resque::redis()->expire((string)$this, self::SECONDS_IN_1_DAY);
 		}
 	}
 
